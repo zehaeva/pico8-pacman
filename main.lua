@@ -1,17 +1,23 @@
 
 game_state = 0
 
-lives = 3
 score = 0
 level = 1
+frame = 0
 
-bricks = { }
-brick  = { }
-paddle = { }
-balls  = { }
-ball   = { }
+pacman = { }
+ghosts = { }
+ghost  = { }
 
-function brick:new(o)
+function next_sprite(o)
+	if o.current_sprite <= count(o.sprites) then
+		o.current_sprite += 1
+	else
+		o.current_sprite = 0
+	end
+end
+
+function pacman:new(o)
 	o = o or {}
 	setmetatable(o, self)
 	self.__index = self
@@ -19,14 +25,18 @@ function brick:new(o)
 	self.y = y
 	self.vx = 0
 	self.vy = 0
-	self.width = 7
-	self.height = 3
-	self.sprite = sprite or 1
-	self.score = score or 100
+	self.width = 11
+	self.height = 11
+	self.sprites = {0, 2, 4, 2}
+	self.current_sprite = 1
+	self.lives = lives or 3
+	self.next_sprite = next_sprite
+	self.facex = false
+	self.facey = false
 	return o
 end
 
-function paddle:new(o)
+function ghost:new(o)
 	o = o or {}
 	setmetatable(o, self)
 	self.__index = self
@@ -38,20 +48,6 @@ function paddle:new(o)
 	self.height = 3
 	self.sprite = sprite or 2
 	self.mvx = 2
-	return o
-end
-
-function ball:new(o)
-	o = o or {}
-	setmetatable(o, self)
-	self.__index = self
-	self.x = x
-	self.y = y
-	self.vx = vx or 0
-	self.vy = vy or 0
-	self.width = 2
-	self.height = 2
-	self.sprite = sprite or 0
 	return o
 end
 
@@ -76,147 +72,41 @@ end
 function bounce()
 end
 
-function fill_bricks()
-	startx = 12
-	starty = 10
-	width = 8
-	height = 4
-	
-	for i=0, 11 do
-		for j=0, 10 do
-			add(bricks, brick:new{x=(i * (width + 1)) + startx, y=(j * (height + 1)) + starty, sprite=1, score=100})
-		end
-	end
-end
-
 function _init()
-	lives = 3
-
-	fill_bricks()
-
-	paddle = paddle:new{x = 58, y = 120, sprite = 2}
-
-	add(balls, ball:new{x = 63, y = 117, vx = 0, vy = 1})
+	pacman = pacman:new{x = 64, y = 64, lives = 3}
 
 	game_state = 0
 end
 
 function _update()
-	if count(balls) == 0 and lives > 1 and (game_state == 0 or game_state == 1) then
-		lives -= 1
-		add(balls, ball:new{x = paddle.x + 4, y = paddle.y - 4, vx = 0, vy = 1})
-	elseif game_state == 4 and btn(4) then
-		level += 1
-		game_state = 0
-		fill_bricks()
-	elseif count(balls) == 0 then
-		game_state = 3
-	elseif count(bricks) <= 0 and lives >= 1 and (game_state == 0 or game_state == 1) then
-		game_state = 4
+	if frame % 3 == 0 then
+		pacman:next_sprite()
+		if frame > 60 then frame = 1 end
 	end
 	
-	if game_state == 0 or game_state == 1 then
-		-- player inputs
-		if btn(0) and paddle.x > 0 then 
-			paddle.vx = paddle.mvx * -1
-		end
-		if btn(1) and paddle.x <= 120 then 
-			paddle.vx = paddle.mvx
-		end
-		
-		if btn(4) and game_state == 0 then
-			game_state = 1
-			for a in all(balls) do
-				a.vy = -1
-			end
-		end
-		
-		deleteballs  = {}
-		deletebricks = {}
-		for i, a in pairs(balls) do
-			-- check wall bounce
-			if (a.x + a.vx) <= 0 or (a.x + a.vx) >= 128 then
-				a.vx = a.vx * -1
-			end
-			if (a.y + a.vy) <= 0 then
-				a.vy = a.vy * -1
-			end
-			
-			-- remove balls that the paddle misses
-			if a.y + a.vy >= 128 then
-				add(deleteballs, i)
-			end
-			
-			nfx = flr((a.x + a.vx))
-			nfy = flr((a.y + a.vy))
-			
-			-- if the ball hits a paddle send the ball back
-			if collision_next_frame(paddle, a) then
-				-- invert the up down
-				a.vy = (a.vy + paddle.vy) * -1
-				if a.vx < 0 then
-					direction = -1
-				else
-					direction = 1
-				end
-				a.vx = min(a.vx + ((rnd(10) * .1) + paddle.vx) * direction, (2 * direction))
-			end
-		
-		-- if the ball hits a block destroy it and reflect it
-			for j, b in pairs(bricks) do
-				if collision_next_frame(a, b) then
-					add(deletebricks, j)
-					
-					score += b.score
-					--printh(sqrt(nfx*nfx + nfy*nfy))
-					pxy = pget(nfx, nfy)
-					if (pxy ~= 0) then
-						printh("----------------")
-						if (pget((nfx + 1), nfy) ~= 0) and 
-						   (pget((nfx - 1), nfy) ~= 0) and 
-						   ((pget(nfx, (nfy + 1)) ~= 0) or (pget(nfx, (nfy - 1)) ~= 0)) then
-							a.vx = a.vx * -1
-							--printh("reflect x axis")
-						end
-						if (pget(nfx, (nfy + 1)) ~= 0) and 
-						   (pget(nfx, (nfy - 1)) ~= 0) and
-						   ((pget((nfx + 1), nfy) ~= 0) or (pget((nfx - 1), nfy) ~= 0)) then
-							a.vy = a.vy * -1
-							--printh("reflect y axis")
-						end
-						
-					else
-						a.vx = a.vx * -1
-						a.vy = a.vy * -1
-					end
-					break
-				end
-			end
-		end
-		
-		for a in all(deleteballs) do
-			deli(balls, a)
-		end
-		deleteballs = { }
-		for a in all(deletebricks) do
-			deli(bricks, a)
-		end
-		deletebricks = { }
-		
-		for a in all(balls) do
-			-- normalize the velocity vector
-			vv = sqrt(a.vx * a.vx + a.vy + a.vy)
-			
-			a.x += a.vx
-			a.y += a.vy
-		end
-		
-		-- move the paddle now
-		paddle.x += paddle.vx
-		paddle.y += paddle.vy
-		paddle.vx = paddle.vx * .2
-		paddle.vy = 0
+	
+	-- player inputs
+	if btn(0) then 
+		pacman.vx = -1
+		pacman.facex = true
 	end
+	if btn(1) then 
+		pacman.vx = 1
+		pacman.facex = false
+	end
+	if btn(2) then 
+		pacman.vy = -1
+	end
+	if btn(3) then 
+		pacman.vy = 1
+	end
+	
+	pacman.x += pacman.vx
+	pacman.y += pacman.vy
+	pacman.vx = 0
+	pacman.vy = 0
+	
+	frame += 1	
 end
 
 function _draw()
@@ -226,17 +116,12 @@ function _draw()
 	if game_state == 0 or game_state == 1 then
 		print("level:"..level, 0, 0)
 		print("score:"..score, 45, 0)
-		print("lives:"..lives, 90, 0)
+		print("lives:"..pacman.lives, 90, 0)
 		
-		spr(paddle.sprite, paddle.x, paddle.y, 2, 1)
+		map( 0, 0, 0, 6, 128, 32)
 		
-		for a in all(balls) do
-			spr(a.sprite, a.x, a.y)
-		end  
+		spr(pacman.sprites[pacman.current_sprite], pacman.x, pacman.y, 2, 2, pacman.facex)
 		
-		for a in all(bricks) do
-			spr(a.sprite, a.x, a.y)
-		end
 	elseif game_state == 3 then
 		print("game over", 45, 45)
 		print("final level:"..level)
